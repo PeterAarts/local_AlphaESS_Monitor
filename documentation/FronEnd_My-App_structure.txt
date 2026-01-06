@@ -1,0 +1,86 @@
+alpha-ess-frontend/
+├── public/
+│   └── favicon.ico
+│
+├── src/
+│   ├── assets/
+│   │   ├── logo.png
+│   │   └── styles/
+│   │       └── main.css
+│   │
+│   ├── components/
+│   │   ├── common/
+│   │   │   ├── StatusCard.vue
+│   │   │   ├── LoadingSpinner.vue
+│   │   │   └── AlertBanner.vue
+│   │   │
+│   │   ├── dashboard/
+│   │   │   ├── EnergyFlowDiagram.vue
+│   │   │   ├── RealTimeStatus.vue
+│   │   │   ├── BatteryStatus.vue
+│   │   │   ├── SolarStatus.vue
+│   │   │   ├── GridStatus.vue
+│   │   │   └── LoadStatus.vue
+│   │   │
+│   │   ├── charts/
+│   │   │   ├── LivePowerChart.vue        // Real-time power flow
+│   │   │   ├── DailyEnergyChart.vue      // Daily energy bars
+│   │   │   ├── BatterySOCChart.vue       // Battery SOC over time
+│   │   │   ├── MonthlyChart.vue          // Monthly comparison
+│   │   │   └── YearlyChart.vue           // Yearly overview
+│   │   │
+│   │   ├── control/
+│   │   │   ├── DispatchControl.vue       // Manual charge/discharge
+│   │   │   ├── ScheduleManager.vue       // Time-based scheduling
+│   │   │   ├── QuickActions.vue          // Stop/prevent/normal buttons
+│   │   │   └── DispatchStatus.vue        // Current dispatch banner
+│   │   │
+│   │   └── settings/
+│   │       ├── SystemConfig.vue          // Battery capacity, etc.
+│   │       ├── TariffSettings.vue        // Electricity pricing
+│   │       └── NotificationSettings.vue
+│   │
+│   ├── views/
+│   │   ├── Dashboard.vue                 // Main overview
+│   │   ├── History.vue                   // Historical data & charts
+│   │   ├── Control.vue                   // Battery control panel
+│   │   ├── Analytics.vue                 // Detailed analytics
+│   │   ├── Events.vue                    // System events log
+│   │   └── Settings.vue                  // Configuration
+│   │
+│   ├── stores/
+│   │   ├── system.js                     // Pinia: Real-time system data
+│   │   ├── history.js                    // Pinia: Historical data
+│   │   ├── dispatch.js                   // Pinia: Dispatch control state
+│   │   └── settings.js                   // Pinia: User settings
+│   │
+│   ├── services/
+│   │   ├── api.js                        // Axios instance & config
+│   │   ├── alphaess.js                   // Alpha ESS API calls
+│   │   ├── history.js                    // History API calls
+│   │   └── websocket.js                  // WebSocket for real-time updates
+│   │
+│   ├── composables/
+│   │   ├── useRealTimeData.js            // Real-time data composable
+│   │   ├── useChartData.js               // Chart data formatting
+│   │   └── useEnergyCalculations.js      // Energy calculations
+│   │
+│   ├── router/
+│   │   └── index.js                      // Vue Router config
+│   │
+│   ├── utils/
+│   │   ├── formatters.js                 // Number/date formatting
+│   │   ├── calculations.js               // Energy calculations
+│   │   └── constants.js                  // App constants
+│   │
+│   ├── App.vue
+│   └── main.js
+│
+├── .env                                   // Environment variables
+├── .env.example
+├── .gitignore
+├── index.html
+├── package.json
+├── vite.config.js
+├── tailwind.config.js
+└── README.md

@@ -1,0 +1,62 @@
+alpha-ess-backend/
+├── src/
+│   ├── config/
+│   │   ├── database.js                   // Database connection config
+│   │   ├── modbus.js                     // Modbus configuration
+│   │   └── app.js                        // Express app config
+│   │
+│   ├── controllers/
+│   │   ├── AlphaESSController.js         // Main Alpha ESS Modbus controller
+│   │   ├── historyController.js          // Historical data controller
+│   │   └── settingsController.js         // Settings controller
+│   │
+│   ├── services/
+│   │   ├── database.js                   // Database service (all DB queries)
+│   │   ├── dataCollector.js              // Continuous data collection
+│   │   ├── aggregator.js                 // Data aggregation service
+│   │   └── scheduler.js                  // Scheduled tasks (charging, etc.)
+│   │
+│   ├── routes/
+│   │   ├── alphaess.js                   // /api/alphaess routes
+│   │   ├── history.js                    // /api/history routes
+│   │   ├── dispatch.js                   // /api/dispatch routes
+│   │   ├── settings.js                   // /api/settings routes
+│   │   └── index.js                      // Route aggregator
+│   │
+│   ├── middleware/
+│   │   ├── errorHandler.js               // Global error handler
+│   │   ├── logger.js                     // Request logging
+│   │   └── validation.js                 // Input validation
+│   │
+│   ├── models/                            // (Optional - if using ORM)
+│   │   ├── EnergySnapshot.js
+│   │   ├── DailyEnergy.js
+│   │   └── SystemEvent.js
+│   │
+│   ├── utils/
+│   │   ├── modbus-helpers.js             // Modbus conversion utilities
+│   │   ├── calculations.js               // Energy calculations
+│   │   └── validators.js                 // Data validators
+│   │
+│   └── websocket/
+│       └── server.js                     // WebSocket server for real-time updates
+│
+├── scripts/
+│   ├── init-database.js                  // Database initialization script
+│   ├── migrate.js                        // Database migrations
+│   └── seed.js                           // Seed initial data
+│
+├── tests/
+│   ├── unit/
+│   │   ├── controllers/
+│   │   └── services/
+│   └── integration/
+│       └── api/
+│
+├── .env                                   // Environment variables
+├── .env.example
+├── .gitignore
+├── package.json
+├── nodemon.json
+├── server.js                              // Main entry point
+└── README.md
