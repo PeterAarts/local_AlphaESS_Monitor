@@ -1,0 +1,29 @@
+{
+  "name": "my-app",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@primevue/themes": "^4.5.4",
+    "@vue-flow/core": "^1.48.1",
+    "@vueuse/core": "^14.1.0",
+    "axios": "^1.13.2",
+    "chart.js": "^4.5.1",
+    "date-fns": "^4.1.0",
+    "pinia": "^3.0.4",
+    "primeicons": "^7.0.0",
+    "primevue": "^4.5.4",
+    "vue": "^3.5.26",
+    "vue-chartjs": "^5.3.3",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.3",
+    "vite": "^7.3.0"
+  }
+}
