@@ -1,144 +1,165 @@
-<!-- src/App.vue -->
+<!-- src/App.vue - Simplified with MainLayout -->
 <template>
   <div id="app">
-    <Menubar :model="menuItems">
-      <template #start>
-        <div class="flex items-center gap-2">
-          <i class="pi pi-bolt text-2xl" style="color: var(--color-solar)"></i>
-          <span class="font-bold text-xl">Alpha ESS Monitor</span>
-        </div>
-      </template>
-      <template #end>
-        <div class="flex items-center gap-3">
-          <Badge :value="lastUpdate" severity="success" />
-          <Button 
-            icon="pi pi-refresh" 
-            rounded 
-            text 
-            @click="refreshData"
-            :loading="systemStore.isLoading"
-          />
-        </div>
-      </template>
-    </Menubar>
+    <!-- Initial Loading Screen -->
+    <div v-if="isInitializing" class="loading-screen">
+      <div class="loading-content">
+        <i class="pi pi-spin pi-spinner" style="font-size: 3rem; color: #6366f1;"></i>
+        <p>Loading AlphaESS Monitor...</p>
+        <p class="loading-substep">{{ loadingStep }}</p>
+      </div>
+    </div>
 
+    <!-- Router View (MainLayout or SetupWizard) -->
+    <router-view v-else />
+    
+    <!-- Toast Notifications -->
     <Toast />
-    <ConfirmDialog />
-
-    <main class="main-content">
-      <router-view />
-    </main>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, onMounted, watch, onUnmounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { useSystemStore } from './stores/system';
+import { useConfigStore } from './stores/config';
 import { useToast } from 'primevue/usetoast';
-import Menubar from 'primevue/menubar';
-import Button from 'primevue/button';
-import Badge from 'primevue/badge';
 import Toast from 'primevue/toast';
-import ConfirmDialog from 'primevue/confirmdialog';
-import { formatDistanceToNow } from 'date-fns';
 
 const router = useRouter();
+const route = useRoute();
 const systemStore = useSystemStore();
+const configStore = useConfigStore();
 const toast = useToast();
 
-const menuItems = ref([
-  {
-    label: 'Dashboard',
-    icon: 'pi pi-home',
-    command: () => router.push('/')
-  },
-  {
-    label: 'History',
-    icon: 'pi pi-chart-line',
-    command: () => router.push('/history')
-  },
-  {
-    label: 'Control',
-    icon: 'pi pi-sliders-h',
-    command: () => router.push('/control')
-  },
-  {
-    label: 'Analytics',
-    icon: 'pi pi-chart-bar',
-    command: () => router.push('/analytics')
-  },
-  {
-    label: 'Events',
-    icon: 'pi pi-list',
-    command: () => router.push('/events')
-  },
-  {
-    label: 'Settings',
-    icon: 'pi pi-cog',
-    command: () => router.push('/settings')
-  }
-]);
+// State
+const isInitializing = ref(true);
+const loadingStep = ref('Checking configuration...');
 
-const lastUpdate = computed(() => {
-  if (!systemStore.lastUpdate) return 'Never';
-  return formatDistanceToNow(systemStore.lastUpdate, { addSuffix: true });
-});
-
-async function refreshData() {
+/**
+ * Initialize application - LOADS CONFIGURATION FIRST!
+ */
+const initializeApp = async () => {
   try {
-    await Promise.all([
-      systemStore.fetchStatus(),
-      systemStore.fetchPVDetails(),
-      systemStore.fetchDispatchStatus()
-    ]);
+    console.log('🚀 Initializing application...');
+    
+    // Step 1: Load configuration
+    loadingStep.value = 'Loading configuration...';
+    await configStore.loadConfiguration();
+    
+    // Step 2: Check if setup is needed
+    loadingStep.value = 'Checking setup status...';
+    if (!configStore.setupCompleted) {
+      console.log('⚠️ Setup not completed - showing wizard');
+      router.push('/setupWizard');
+      isInitializing.value = false;
+      return;
+    }
+    
+    // Step 3: Initialize system store (check ModBus connection)
+    loadingStep.value = 'Connecting to system...';
+    await systemStore.initialize();
+    
+    // Step 4: Navigate to appropriate page
+    loadingStep.value = 'Loading dashboard...';
+    if (route.path === '/setupWizard') {
+      router.push('/');
+    }
+    
+    console.log('✅ Application initialized successfully');
+    
   } catch (error) {
+    console.error('❌ Error initializing application:', error);
+    
     toast.add({
       severity: 'error',
-      summary: 'Error',
-      detail: 'Failed to refresh data',
+      summary: 'Initialization Error',
+      detail: 'Failed to load application. Please check your connection.',
       life: 5000
     });
+    
+    // Show setup wizard as fallback
+    router.push('/setupWizard');
+    
+  } finally {
+    isInitializing.value = false;
   }
-}
+};
 
-let intervalId;
-onMounted(() => {
-  refreshData();
-  // Auto-refresh every 10 seconds
-  intervalId = setInterval(refreshData, 10000);
+/**
+ * Auto-refresh data
+ */
+let refreshInterval = null;
+
+const startAutoRefresh = () => {
+  if (refreshInterval) return;
+  
+  refreshInterval = setInterval(() => {
+    if (systemStore.isConnected && systemStore.autoRefreshEnabled) {
+      systemStore.fetchStatus();
+    }
+  }, 5000); // Refresh every 5 seconds
+};
+
+const stopAutoRefresh = () => {
+  if (refreshInterval) {
+    clearInterval(refreshInterval);
+    refreshInterval = null;
+  }
+};
+
+// Watch for connection changes
+watch(() => systemStore.autoRefreshEnabled, (enabled) => {
+  if (enabled) {
+    startAutoRefresh();
+  } else {
+    stopAutoRefresh();
+  }
 });
 
+// Initialize on mount
+onMounted(async () => {
+  await initializeApp();
+  
+  // Start auto-refresh if connected
+  if (systemStore.isConnected && systemStore.autoRefreshEnabled) {
+    startAutoRefresh();
+  }
+});
+
+// Cleanup on unmount
 onUnmounted(() => {
-  if (intervalId) clearInterval(intervalId);
+  stopAutoRefresh();
 });
 </script>
 
-<style scoped>
+<style>
 #app {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background: #f8fafc;
 }
 
-.main-content {
-  padding: 1.5rem;
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.flex {
+.loading-screen {
   display: flex;
-}
-
-.items-center {
   align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: #f8fafc;
 }
 
-.gap-2 {
-  gap: 0.5rem;
+.loading-content {
+  text-align: center;
 }
 
-.gap-3 {
-  gap: 0.75rem;
+.loading-content p {
+  margin-top: 1rem;
+  color: #64748b;
+  font-size: 1rem;
+}
+
+.loading-substep {
+  font-size: 0.875rem;
+  color: #94a3b8;
+  margin-top: 0.5rem;
 }
 </style>

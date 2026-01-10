@@ -1,6 +1,39 @@
 <!-- DynamicSystemDiagram-VueFlow-Nested.vue -->
 <template>
   <div class="dynamic-system-diagram">
+    <!-- Connection Status Banner - NEW -->
+    <div v-if="showConnectionBanner" class="connection-banner" :class="connectionStatusClass">
+      <div class="banner-content">
+        <div class="status-indicator">
+          <span class="status-dot" :class="{ 'connected': isConnected, 'disconnected': !isConnected }"></span>
+          <span class="status-text">
+            {{ isConnected ? 'ModBus Connected' : 'ModBus Disconnected' }}
+          </span>
+          <span v-if="isConnected && autoRefreshEnabled" class="live-badge">● LIVE</span>
+          <span v-else-if="isConnected && !autoRefreshEnabled" class="paused-badge">⏸ PAUSED</span>
+        </div>
+        
+        <div class="banner-actions">
+          <button 
+            v-if="isConnected" 
+            @click="toggleAutoRefresh"
+            class="banner-button"
+            :class="{ 'active': autoRefreshEnabled }"
+          >
+            {{ autoRefreshEnabled ? 'Pause Updates' : 'Resume Updates' }}
+          </button>
+          <button 
+            v-if="!isConnected" 
+            @click="retryConnection"
+            class="banner-button retry"
+            :disabled="isRetrying"
+          >
+            {{ isRetrying ? 'Retrying...' : 'Retry Connection' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Controls -->
     <div class="diagram-controls">
       <div class="view-mode-selector">
@@ -143,6 +176,73 @@ const edges = ref([]);
 const canvasHeight = ref(500);
 const powerData = ref({}); // Reactive power data from WebSocket
 let ws = null; // WebSocket connection
+ 
+// OPTIONAL STORE INTEGRATION (works without store too)
+let systemStore = null;
+let isConnected = ref(false);
+let autoRefreshEnabled = ref(true);
+
+// Store will be initialized later if available
+const initializeStore = () => {
+  try {
+    // This will only work if systemStore.js exists and Pinia is configured
+    // If not, component still works with local state
+    const storeModule = { useSystemStore: null };
+    // Comment these back in when store is ready:
+    // const { useSystemStore } = require('@/stores/systemStore');
+    // const { storeToRefs } = require('pinia');
+    // systemStore = useSystemStore();
+    // const storeRefs = storeToRefs(systemStore);
+    // isConnected = storeRefs.isConnected;
+    // autoRefreshEnabled = storeRefs.autoRefreshEnabled;
+    console.log('Store integration disabled - using local state');
+  } catch (err) {
+    console.warn('System store not available, using local state');
+  }
+};
+
+initializeStore();
+
+const showConnectionBanner = ref(true);
+const isRetrying = ref(false);
+
+// Computed connection status class
+const connectionStatusClass = computed(() => ({
+  'connected': isConnected.value,
+  'disconnected': !isConnected.value
+}));
+
+// Toggle auto-refresh
+function toggleAutoRefresh() {
+  if (autoRefreshEnabled.value) {
+    console.log('⏸ Pausing auto-refresh');
+    autoRefreshEnabled.value = false;
+  } else {
+    console.log('▶️ Resuming auto-refresh');
+    autoRefreshEnabled.value = true;
+  }
+}
+
+// Retry connection
+async function retryConnection() {
+  isRetrying.value = true;
+  console.log('🔄 Manual retry requested');
+  
+  try {
+    if (ws) ws.close();
+    connectWebSocket();
+    
+    if (systemStore.manualRefresh) {
+      await systemStore.manualRefresh();
+    }
+  } catch (error) {
+    console.error('❌ Retry failed:', error);
+  } finally {
+    setTimeout(() => {
+      isRetrying.value = false;
+    }, 2000);
+  }
+}
 
 const viewModeOptions = [
   { label: 'Simple', value: 'simple' },
@@ -162,11 +262,51 @@ const connectWebSocket = () => {
   
   ws.onmessage = (event) => {
     try {
-      const data = JSON.parse(event.data);
-      // Update power data reactively
-      powerData.value = data;
-      // Don't rebuild nodes - just update the reactive data
-      // Vue Flow will automatically re-render with new data
+      const message = JSON.parse(event.data);
+      
+      // Handle different message types
+      if (message.type === 'modbus_connected') {
+        // ModBus reconnected - restart auto-refresh!
+        console.log('🔄 ModBus reconnected - restarting auto-refresh');
+        isConnected.value = true;
+        autoRefreshEnabled.value = true;
+        if (systemStore && systemStore.handleConnectionRestored) {
+          systemStore.handleConnectionRestored();
+        }
+        
+      } else if (message.type === 'modbus_disconnected') {
+        // ModBus disconnected - stop auto-refresh!
+        console.log('⚠️ ModBus disconnected - stopping auto-refresh');
+        isConnected.value = false;
+        autoRefreshEnabled.value = false;
+        if (systemStore && systemStore.handleConnectionLost) {
+          systemStore.handleConnectionLost();
+        }
+        
+      } else if (message.type === 'connection_status') {
+        // Initial connection status
+        console.log('📊 Connection status:', message.connected);
+        isConnected.value = message.connected;
+        if (systemStore) {
+          systemStore.isConnected = message.connected;
+        }
+        
+      } else if (message.batterySOC !== undefined) {
+        // Power update - only process if auto-refresh is enabled
+        if (autoRefreshEnabled.value) {
+          powerData.value = message;
+        }
+      } else if (message.data && message.data.batterySOC !== undefined) {
+        // Wrapped power update
+        if (autoRefreshEnabled.value) {
+          powerData.value = message.data;
+        }
+      } else {
+        // Default: treat as power data (backward compatible)
+        if (autoRefreshEnabled.value) {
+          powerData.value = message;
+        }
+      }
     } catch (error) {
       console.error('WebSocket message error:', error);
     }
@@ -178,8 +318,10 @@ const connectWebSocket = () => {
   
   ws.onclose = () => {
     console.log('WebSocket disconnected, reconnecting in 5s...');
-    // Reconnect after 5 seconds
-    setTimeout(connectWebSocket, 5000);
+    // Only reconnect if we're still mounted
+    if (ws) {
+      setTimeout(connectWebSocket, 5000);
+    }
   };
 };
 
@@ -187,14 +329,32 @@ const connectWebSocket = () => {
 onUnmounted(() => {
   if (ws) {
     ws.close();
+    ws = null;  // Prevent reconnection
   }
 });
 
 // Load architecture
 onMounted(async () => {
-  await loadArchitecture();
-  buildNodesAndEdges();
-  connectWebSocket(); // Start WebSocket connection
+  console.log('🚀 DynamicSystemDiagram mounting...');
+  
+  // Store is initialized by Dashboard - don't initialize here
+  // WebSocket will handle connection status updates
+  
+  // Load diagram regardless of store status
+  try {
+    console.log('📊 Loading architecture...');
+    await loadArchitecture();
+    
+    console.log('🏗️ Building nodes and edges...');
+    buildNodesAndEdges();
+    
+    console.log('🔌 Connecting WebSocket...');
+    connectWebSocket();
+    
+    console.log('✅ DynamicSystemDiagram mounted successfully');
+  } catch (err) {
+    console.error('❌ Error during mount:', err);
+  }
 });
 
 const loadArchitecture = async () => {
@@ -301,10 +461,30 @@ const loadArchitecture = async () => {
     flows.value = flowList;
     
   } catch (error) {
+    console.error('❌ Error loading architecture:', error);
+    console.error('Error details:', error.response?.data || error.message);
+    
+    // Set empty data so diagram still tries to render
+    components.value = [];
+    flows.value = [];
+    
+    // Show error to user
+    alert(`Failed to load system architecture: ${error.message}\n\nPlease check:\n1. Is the API server running?\n2. Is http://localhost:3000 accessible?\n3. Check browser console for details`);
   }
 };
 
 const buildNodesAndEdges = () => {
+  console.log('🏗️ Building nodes and edges...');
+  console.log('Components:', components.value?.length || 0);
+  console.log('Flows:', flows.value?.length || 0);
+  
+  // Safety check
+  if (!components.value || components.value.length === 0) {
+    console.warn('⚠️ No components to build - architecture may not be loaded');
+    nodes.value = [];
+    edges.value = [];
+    return;
+  }
   
   flows.value.forEach((flow, idx) => {
   });
@@ -1062,3 +1242,115 @@ const updateNodePowerData = () => {
   pointer-events: none;
 }
 </style>
+/* Connection Banner Styles - NEW */
+.connection-banner {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.connection-banner.connected {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.connection-banner.disconnected {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+}
+
+.banner-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.status-dot.connected {
+  background: white;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.status-dot.disconnected {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.status-text {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.live-badge {
+  padding: 0.25rem 0.75rem;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.paused-badge {
+  padding: 0.25rem 0.75rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.banner-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.banner-button {
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.banner-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.banner-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.banner-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.banner-button.active {
+  background: rgba(255, 255, 255, 0.35);
+  border-color: rgba(255, 255, 255, 0.5);
+}

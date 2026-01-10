@@ -3,7 +3,14 @@
   <div class="dashboard-container">
     <!-- Header Section -->
     <div class="dashboard-header">
-      <h1 class="dashboard-title">Dashboard</h1>
+      <div class="header-left">
+        <h1 class="dashboard-title">Dashboard</h1>
+        <!-- Connection Status Indicator -->
+        <div class="connection-indicator" :class="{ 'connected': systemStore.isConnected, 'disconnected': !systemStore.isConnected }">
+          <span class="status-dot"></span>
+          <span class="status-text">{{ systemStore.isConnected ? 'Live Data' : 'Historical Data Only' }}</span>
+        </div>
+      </div>
       <div class="date-navigation">
         <Button icon="pi pi-chevron-left" text rounded @click="previousDay" />
         <span class="current-date">{{ formatDate(currentDate) }}</span>
@@ -14,7 +21,7 @@
     <!-- Summary Section Headers -->
     <div class="summary-wrapper">
       <div class="section-header today-header">
-        <h2 class="section-title">Today</h2>
+        <h2 class="section-title">Daily</h2>
       </div>
       <div class="section-header total-header">
         <h2 class="section-title">Total</h2>
@@ -78,10 +85,10 @@
                 <!-- Battery Status Panel (Left Side) -->
                 <div class="soc-panel-wrapper">
                   <BatteryStatus
-                    :soc="systemStore.status.battery.soc"
-                    :power="systemStore.status.battery.power"
-                    :voltage="systemStore.status.battery.voltage"
-                    :temperature="systemStore.status.battery.temperature"
+                    :soc="systemStore.status?.battery?.soc ?? 0"
+                    :power="systemStore.status?.battery?.power ?? 0"
+                    :voltage="systemStore.status?.battery?.voltage ?? 0"
+                    :temperature="systemStore.status?.battery?.temperature ?? 0"
                     :showDetails="false"
                   />
                 </div>
@@ -100,28 +107,28 @@
                 <div class="stat-item">
                   <span class="stat-label">Grid:</span>
                   <span class="stat-value" :class="gridStatusClass">
-                    {{ formatPower(systemStore.status.grid.power) }}
+                    {{ formatPower(systemStore.status?.grid?.power) }}
                   </span>
                   <span class="stat-status">{{ gridStatus }}</span>
                 </div>
                 <div class="stat-item">
                   <span class="stat-label">Solar:</span>
                   <span class="stat-value solar-color">
-                    {{ formatPower(systemStore.status.pv.power) }}
+                    {{ formatPower(systemStore.status?.pv?.power) }}
                   </span>
                   <span class="stat-status">Generating</span>
                 </div>
                 <div class="stat-item">
                   <span class="stat-label">Battery:</span>
                   <span class="stat-value" :class="batteryStatusClass">
-                    {{ formatPower(Math.abs(systemStore.status.battery.power)) }}
+                    {{ formatPower(Math.abs(systemStore.status?.battery?.power)) }}
                   </span>
                   <span class="stat-status">{{ batteryStatus }}</span>
                 </div>
                 <div class="stat-item">
                   <span class="stat-label">Load:</span>
                   <span class="stat-value load-color">
-                    {{ formatPower(systemStore.status.load.power) }}
+                    {{ formatPower(systemStore.status?.load?.power) }}
                   </span>
                   <span class="stat-status">Consuming</span>
                 </div>
@@ -276,27 +283,27 @@ const greenStats = computed(() => [
 
 // Grid status
 const gridStatus = computed(() => {
-  if (systemStore.status.grid.power > 0) return 'Importing';
-  if (systemStore.status.grid.power < 0) return 'Exporting';
+  if (systemStore.status?.grid?.power > 0) return 'Importing';
+  if (systemStore.status?.grid?.power < 0) return 'Exporting';
   return 'Idle';
 });
 
 const gridStatusClass = computed(() => {
-  if (systemStore.status.grid.power > 0) return 'grid-import';
-  if (systemStore.status.grid.power < 0) return 'grid-export';
+  if (systemStore.status?.grid?.power > 0) return 'grid-import';
+  if (systemStore.status?.grid?.power < 0) return 'grid-export';
   return 'grid-idle';
 });
 
 // Battery status
 const batteryStatus = computed(() => {
-  if (systemStore.status.battery.power > 0) return 'Charging';
-  if (systemStore.status.battery.power < 0) return 'Discharging';
+  if (systemStore.status?.battery?.power > 0) return 'Charging';
+  if (systemStore.status?.battery?.power < 0) return 'Discharging';
   return 'Idle';
 });
 
 const batteryStatusClass = computed(() => {
-  if (systemStore.status.battery.power > 0) return 'battery-charging';
-  if (systemStore.status.battery.power < 0) return 'battery-discharging';
+  if (systemStore.status?.battery?.power > 0) return 'battery-charging';
+  if (systemStore.status?.battery?.power < 0) return 'battery-discharging';
   return 'battery-idle';
 });
 
@@ -315,17 +322,41 @@ const formatDate = (date) => {
   return date.toISOString().split('T')[0];
 };
 
-// Load dashboard data
-const loadDashboardData = async () => {
+// Load historical data for a specific date
+const loadHistoricalData = async (date) => {
   try {
-    await systemStore.fetchStatus();
+    const dateStr = formatDate(date);
+    console.log('Loading historical data for:', dateStr);
+    
+    // TODO: Replace with your actual historical data API endpoint
+    // const response = await axios.get(`http://localhost:3000/api/history/daily/${dateStr}`);
+    // todaySummary.value = response.data;
+    
+    // For now, just log that we would load data for this date
+    console.log('Would load data for:', dateStr);
   } catch (error) {
+    console.error('Error loading historical data:', error);
     toast.add({
       severity: 'error',
       summary: 'Error',
-      detail: 'Failed to load dashboard data',
+      detail: 'Failed to load historical data',
       life: 5000
     });
+  }
+};
+
+// Load dashboard data for selected date
+const loadDashboardData = async () => {
+  try {
+    // If connected, fetch live status
+    if (systemStore.isConnected) {
+      await systemStore.fetchStatus();
+    }
+    // Always load historical data for selected date
+    await loadHistoricalData(currentDate.value);
+  } catch (error) {
+    // Log error but don't show toast - errors are handled gracefully
+    console.warn('Error loading dashboard data:', error);
   }
 };
 
@@ -335,10 +366,21 @@ let refreshInterval;
 onMounted(async () => {
   await loadDashboardData();
   
-  // Refresh every 10 seconds
-  refreshInterval = setInterval(() => {
-    systemStore.fetchStatus();
-  }, 10000);
+  // Only auto-refresh if connected (live data)
+  // Historical data doesn't need auto-refresh
+  if (systemStore.isConnected) {
+    refreshInterval = setInterval(() => {
+      if (systemStore.isConnected) {
+        systemStore.fetchStatus();
+      } else {
+        // Connection lost, clear interval
+        if (refreshInterval) {
+          clearInterval(refreshInterval);
+          refreshInterval = null;
+        }
+      }
+    }, 10000);
+  }
 });
 
 onUnmounted(() => {
@@ -576,3 +618,50 @@ onUnmounted(() => {
   }
 }
 </style>
+/* Connection Indicator Styles */
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.connection-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.connection-indicator.connected {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.connection-indicator.disconnected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.connection-indicator .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.connection-indicator.connected .status-dot {
+  animation: pulse-indicator 2s ease-in-out infinite;
+}
+
+@keyframes pulse-indicator {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.connection-indicator .status-text {
+  font-size: 0.813rem;
+}

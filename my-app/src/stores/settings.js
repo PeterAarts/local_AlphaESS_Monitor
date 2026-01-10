@@ -1,17 +1,8 @@
-// src/stores/settings.js
+// src/stores/settings.js - User Settings/Preferences Store
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
 export const useSettingsStore = defineStore('settings', () => {
-  // System Configuration
-  const systemConfig = ref({
-    sysSn: localStorage.getItem('sysSn') || '',
-    batteryCapacity: parseFloat(localStorage.getItem('batteryCapacity')) || 10.0,
-    solarCapacity: parseFloat(localStorage.getItem('solarCapacity')) || 5.0,
-    location: localStorage.getItem('location') || '',
-    timezone: localStorage.getItem('timezone') || 'UTC',
-  });
-
   // Tariff Settings
   const tariffSettings = ref({
     type: localStorage.getItem('tariffType') || 'flat',
@@ -19,8 +10,8 @@ export const useSettingsStore = defineStore('settings', () => {
     peakRate: parseFloat(localStorage.getItem('peakRate')) || 0.25,
     offPeakRate: parseFloat(localStorage.getItem('offPeakRate')) || 0.10,
     peakHours: JSON.parse(localStorage.getItem('peakHours') || '{"start": "17:00", "end": "21:00"}'),
-    currency: localStorage.getItem('currency') || 'USD',
-    currencySymbol: localStorage.getItem('currencySymbol') || '$',
+    currency: localStorage.getItem('currency') || 'EUR',
+    currencySymbol: localStorage.getItem('currencySymbol') || '€',
   });
 
   // Notification Settings
@@ -42,16 +33,6 @@ export const useSettingsStore = defineStore('settings', () => {
     dateFormat: localStorage.getItem('dateFormat') || 'yyyy-MM-dd',
     timeFormat: localStorage.getItem('timeFormat') || '24h',
   });
-
-  // Update System Config
-  const updateSystemConfig = (config) => {
-    systemConfig.value = { ...systemConfig.value, ...config };
-    
-    // Persist to localStorage
-    Object.keys(config).forEach(key => {
-      localStorage.setItem(key, config[key]);
-    });
-  };
 
   // Update Tariff Settings
   const updateTariffSettings = (settings) => {
@@ -152,26 +133,23 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // Reset all settings to defaults
   const resetAllSettings = () => {
-    // Clear localStorage
-    localStorage.clear();
+    // Clear localStorage (but not config!)
+    const configKeys = ['selected_model_id', 'modbus_ip', 'cloud_api_id'];
+    Object.keys(localStorage).forEach(key => {
+      if (!configKeys.includes(key)) {
+        localStorage.removeItem(key);
+      }
+    });
     
     // Reset to defaults
-    systemConfig.value = {
-      sysSn: '',
-      batteryCapacity: 10.0,
-      solarCapacity: 5.0,
-      location: '',
-      timezone: 'UTC',
-    };
-    
     tariffSettings.value = {
       type: 'flat',
       flatRate: 0.15,
       peakRate: 0.25,
       offPeakRate: 0.10,
       peakHours: { start: '17:00', end: '21:00' },
-      currency: 'USD',
-      currencySymbol: '$',
+      currency: 'EUR',
+      currencySymbol: '€',
     };
     
     notificationSettings.value = {
@@ -198,13 +176,11 @@ export const useSettingsStore = defineStore('settings', () => {
 
   return {
     // State
-    systemConfig,
     tariffSettings,
     notificationSettings,
     displaySettings,
     
     // Actions
-    updateSystemConfig,
     updateTariffSettings,
     updateNotificationSettings,
     updateDisplaySettings,
